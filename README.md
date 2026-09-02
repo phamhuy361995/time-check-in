@@ -54,7 +54,7 @@ Dự án dùng hai Vercel Project từ cùng một Git repository:
 1. **Backend Project**
    - Framework Preset: `Express`.
    - Root Directory: `backend`.
-   - Entrypoint: `server.js` (Vercel tự nhận diện).
+   - Entrypoint: `app.js` (Vercel tự nhận diện).
    - Không cấu hình Build Command hay Output Directory.
    - Runtime database URL: `POSTGRES_URL` từ Supabase Transaction pooler.
    - Migration URL: `POSTGRES_URL_NON_POOLING`.
@@ -84,7 +84,7 @@ Nếu có nhiều frontend domain hoặc Preview URL, phân cách bằng dấu p
 - Output Directory: để trống và tắt `Override`.
 - Install Command: để Vercel tự động chọn `npm install`.
 
-Express được Vercel tự động đóng gói từ `server.js`, vì vậy không chạy `node server.js`, `npm run server` hay `npm run build` làm Build Command của Backend Project. Có thể kiểm tra cú pháp các file server trước khi deploy:
+Express được Vercel tự động đóng gói từ `backend/app.js`, vì vậy không chạy `node app.js`, `npm run server` hay `npm run build` làm Build Command của Backend Project. Có thể kiểm tra cú pháp các file server trước khi deploy:
 
 ```bash
 npm run build:server

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "node --watch local.js",
     "start": "node local.js",
-    "check": "node --check server.js && node --check app.js && node --check db.js && node --check payroll.js && node --check local.js"
+    "check": "node --check app.js && node --check db.js && node --check payroll.js && node --check local.js"
   },
   "dependencies": {
     "@vercel/functions": "^3.4.3",
