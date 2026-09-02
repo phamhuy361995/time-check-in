@@ -2,13 +2,27 @@ import 'dotenv/config'
 import { randomUUID } from 'node:crypto'
 import cors from 'cors'
 import express from 'express'
-import { initializeDatabase, pool, serializeSession } from './db.js'
+import { pool, serializeSession } from './db.js'
 import { calculatePayroll, currentPeriod, getPayrollRange } from './payroll.js'
 
 const app = express()
-const port = Number(process.env.PORT || 3001)
+app.disable('x-powered-by')
+const allowedOrigins = (process.env.CLIENT_ORIGINS || process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean)
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }))
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+      callback(null, true)
+      return
+    }
+    const error = new Error('Origin không được phép truy cập API.')
+    error.status = 403
+    callback(error)
+  },
+}))
 app.use(express.json())
 
 function asyncRoute(handler) {
@@ -152,15 +166,10 @@ app.get('/api/payroll-summary', asyncRoute(async (request, response) => {
 }))
 
 app.use((error, _request, response, _next) => {
-  console.error(error)
-  response.status(500).json({ message: 'Máy chủ gặp lỗi. Vui lòng thử lại.' })
+  if (!error.status || error.status >= 500) console.error(error)
+  response.status(error.status || 500).json({
+    message: error.status === 403 ? error.message : 'Máy chủ gặp lỗi. Vui lòng thử lại.',
+  })
 })
 
-initializeDatabase()
-  .then(() => {
-    app.listen(port, () => console.log(`Tempo API đang chạy tại http://localhost:${port}`))
-  })
-  .catch((error) => {
-    console.error('Không thể kết nối MySQL:', error.message)
-    process.exit(1)
-  })
+export default app

@@ -45,3 +45,30 @@ npm run dev:all
 - `POST /api/sessions/check-out`: kết thúc phiên hiện tại.
 - `GET /api/settings`, `PUT /api/settings`: đọc/cập nhật cấu hình tính công.
 - `GET /api/payroll-summary?period=2026-09`: tổng hợp ngày công của kỳ.
+
+## Deploy frontend và backend trên Vercel
+
+Dự án dùng hai Vercel Project từ cùng một Git repository:
+
+1. **Backend Project**
+   - Framework Preset: `Express`.
+   - Root Directory: thư mục gốc repository.
+   - Entrypoint: `server.js` (Vercel tự nhận diện).
+   - Không cấu hình Build Command hay Output Directory.
+   - Environment Variables: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`, `DB_SSL`, `DB_SSL_CA` (nếu provider yêu cầu), `DB_CONNECTION_LIMIT`, `DB_IDLE_TIMEOUT`, `DB_CONNECT_TIMEOUT`, `APP_TIMEZONE_OFFSET_MINUTES`, `CLIENT_ORIGINS`.
+   - Không cần `PORT` và `DB_AUTO_MIGRATE` trên Vercel. Chạy `server/schema.sql` vào database trước khi deploy.
+
+2. **Frontend Project**
+   - Framework Preset: `Vite`.
+   - Root Directory: thư mục gốc repository.
+   - Build Command: `npm run build`.
+   - Output Directory: `dist`.
+   - Environment Variable: `VITE_API_URL=https://<backend-project>.vercel.app`.
+
+3. Quay lại Backend Project và đặt:
+
+```env
+CLIENT_ORIGINS=https://<frontend-project>.vercel.app
+```
+
+Nếu có nhiều frontend domain hoặc Preview URL, phân cách bằng dấu phẩy. Sau khi đổi Environment Variables, redeploy cả project liên quan. Frontend sẽ gọi `${VITE_API_URL}/api/...`; local development vẫn dùng Vite proxy khi `VITE_API_URL` để trống.

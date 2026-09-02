@@ -1,10 +1,14 @@
-import mysql from 'mysql2/promise'
+import mysql from 'mysql2'
+import { attachDatabasePool } from '@vercel/functions'
 
-const databaseName = process.env.DB_DATABASE || 'tempo_checkin'
+const databaseName = process.env.DB_DATABASE || 'time_check_in'
 
 if (!/^[a-zA-Z0-9_]+$/.test(databaseName)) {
   throw new Error('DB_DATABASE chỉ được chứa chữ cái, số và dấu gạch dưới.')
 }
+
+const sslEnabled = process.env.DB_SSL === 'true'
+const sslCa = process.env.DB_SSL_CA?.replace(/\\n/g, '\n')
 
 const connectionOptions = {
   host: process.env.DB_HOST || '127.0.0.1',
@@ -12,18 +16,36 @@ const connectionOptions = {
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   timezone: 'Z',
+  connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT || 10000),
+  ...(sslEnabled ? {
+    ssl: {
+      rejectUnauthorized: true,
+      ...(sslCa ? { ca: sslCa } : {}),
+    },
+  } : {}),
 }
 
-export const pool = mysql.createPool({
+const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT || 5)
+const rawPool = mysql.createPool({
   ...connectionOptions,
   database: databaseName,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit,
+  maxIdle: connectionLimit,
+  idleTimeout: Number(process.env.DB_IDLE_TIMEOUT || 10000),
   queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0,
 })
 
+export const pool = rawPool.promise()
+
+if (process.env.VERCEL) {
+  attachDatabasePool(rawPool)
+}
+
 export async function initializeDatabase() {
-  const bootstrap = await mysql.createConnection(connectionOptions)
+  const bootstrap = mysql.createConnection(connectionOptions).promise()
   await bootstrap.query(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
   await bootstrap.end()
 

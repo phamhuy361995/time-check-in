@@ -3,15 +3,19 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "vite",
-    "dev:server": "node --watch server/app.js",
+    "dev:server": "node --watch server/local.js",
     "dev:all": "concurrently -n WEB,API -c cyan,magenta \"npm:dev\" \"npm:dev:server\"",
-    "server": "node server/app.js",
+    "server": "node server/local.js",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@vercel/functions": "latest",
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
     "typescript": "latest",
