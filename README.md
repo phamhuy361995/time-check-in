@@ -1,11 +1,11 @@
 # Tempo — Time Check-in
 
-Ứng dụng check in/out, theo dõi ngày công và thu nhập, xây dựng với React, Node.js, Express, MySQL và Tailwind CSS.
+Ứng dụng check in/out, theo dõi ngày công và thu nhập, xây dựng với React, Node.js, Express, Supabase PostgreSQL và Tailwind CSS.
 
 ## Yêu cầu
 
 - Node.js 20+
-- MySQL 8+
+- Một Supabase Project
 
 ## Cài đặt
 
@@ -14,7 +14,7 @@ npm install
 Copy-Item .env.example .env
 ```
 
-Cập nhật tài khoản MySQL trong `.env`. API sẽ tự tạo database `tempo_checkin` và các bảng khi tài khoản có quyền. Nếu tài khoản không có quyền tạo database, chạy thủ công [server/schema.sql](server/schema.sql) trước.
+Cập nhật `POSTGRES_URL` và `POSTGRES_URL_NON_POOLING` trong `.env`. Có thể chạy [server/schema.sql](server/schema.sql) bằng Supabase SQL Editor; khi chạy local, `POSTGRES_AUTO_MIGRATE=true` cũng sẽ tự tạo/cập nhật các bảng.
 
 Khởi động frontend và backend cùng lúc:
 
@@ -31,7 +31,7 @@ npm run dev:all
 - Check in để bắt đầu một phiên làm việc và check out để kết thúc.
 - Bộ đếm thời gian theo thời gian thực.
 - Tổng thời gian, mục tiêu trong ngày và biểu đồ 7 ngày.
-- Phiên làm việc và cài đặt được lưu trong MySQL.
+- Phiên làm việc và cài đặt được lưu trong Supabase PostgreSQL.
 - Một ngày được tính công khi đạt ngưỡng tùy chỉnh, mặc định tối thiểu 6 giờ.
 - Cấu hình chu kỳ công theo ngày bắt đầu/kết thúc hàng tháng, ví dụ 26 → 25.
 - Chọn ngày tham gia dự án trước mỗi lần check in; ngày này được lưu cùng phiên làm việc.
@@ -55,8 +55,10 @@ Dự án dùng hai Vercel Project từ cùng một Git repository:
    - Root Directory: thư mục gốc repository.
    - Entrypoint: `server.js` (Vercel tự nhận diện).
    - Không cấu hình Build Command hay Output Directory.
-   - Environment Variables: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`, `DB_SSL`, `DB_SSL_CA` (nếu provider yêu cầu), `DB_CONNECTION_LIMIT`, `DB_IDLE_TIMEOUT`, `DB_CONNECT_TIMEOUT`, `APP_TIMEZONE_OFFSET_MINUTES`, `CLIENT_ORIGINS`.
-   - Không cần `PORT` và `DB_AUTO_MIGRATE` trên Vercel. Chạy `server/schema.sql` vào database trước khi deploy.
+   - Runtime database URL: `POSTGRES_URL` từ Supabase Transaction pooler.
+   - Migration URL: `POSTGRES_URL_NON_POOLING`.
+   - Các biến còn lại: `POSTGRES_POOL_MAX`, `POSTGRES_IDLE_TIMEOUT`, `POSTGRES_CONNECT_TIMEOUT`, `POSTGRES_SSL_CA` (tùy chọn), `APP_TIMEZONE_OFFSET_MINUTES`, `CLIENT_ORIGINS`.
+   - Không cần `PORT` và `POSTGRES_AUTO_MIGRATE` trên Vercel. Chạy `server/schema.sql` trong Supabase SQL Editor trước khi deploy.
 
 2. **Frontend Project**
    - Framework Preset: `Vite`.

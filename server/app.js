@@ -30,7 +30,7 @@ function asyncRoute(handler) {
 }
 
 async function getSettings() {
-  const [rows] = await pool.execute('SELECT minimum_minutes, period_start_day, period_end_day, fixed_income FROM payroll_settings WHERE id = 1')
+  const { rows } = await pool.query('SELECT minimum_minutes, period_start_day, period_end_day, fixed_income FROM public.payroll_settings WHERE id = 1')
   return rows[0]
 }
 
@@ -42,7 +42,7 @@ function isValidProjectDate(value) {
 
 app.get('/api/health', asyncRoute(async (_request, response) => {
   await pool.query('SELECT 1')
-  response.json({ status: 'ok', database: 'connected' })
+  response.json({ status: 'ok', database: 'supabase-postgres-connected' })
 }))
 
 app.get('/api/sessions', asyncRoute(async (request, response) => {
@@ -52,18 +52,18 @@ app.get('/api/sessions', asyncRoute(async (request, response) => {
   if (request.query.from) {
     const from = new Date(request.query.from)
     if (Number.isNaN(from.getTime())) return response.status(400).json({ message: 'Thời gian bắt đầu không hợp lệ.' })
-    conditions.push('(check_out IS NULL OR check_out >= ?)')
     values.push(from)
+    conditions.push(`(check_out IS NULL OR check_out >= $${values.length})`)
   }
   if (request.query.to) {
     const to = new Date(request.query.to)
     if (Number.isNaN(to.getTime())) return response.status(400).json({ message: 'Thời gian kết thúc không hợp lệ.' })
-    conditions.push('check_in <= ?')
     values.push(to)
+    conditions.push(`check_in <= $${values.length}`)
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-  const [rows] = await pool.execute(`SELECT id, check_in, check_out, project_date FROM work_sessions ${where} ORDER BY check_in DESC`, values)
+  const { rows } = await pool.query(`SELECT id, check_in, check_out, project_date FROM public.work_sessions ${where} ORDER BY check_in DESC`, values)
   response.json({ sessions: rows.map(serializeSession) })
 }))
 
@@ -75,9 +75,9 @@ app.post('/api/sessions/check-in', asyncRoute(async (request, response) => {
   const id = randomUUID()
   const checkIn = new Date()
   try {
-    await pool.execute('INSERT INTO work_sessions (id, check_in, project_date) VALUES (?, ?, ?)', [id, checkIn, projectDate])
+    await pool.query('INSERT INTO public.work_sessions (id, check_in, project_date) VALUES ($1, $2, $3)', [id, checkIn, projectDate])
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === '23505') {
       return response.status(409).json({ message: 'Bạn đang có một phiên làm việc chưa check out.' })
     }
     throw error
@@ -86,21 +86,21 @@ app.post('/api/sessions/check-in', asyncRoute(async (request, response) => {
 }))
 
 app.post('/api/sessions/check-out', asyncRoute(async (_request, response) => {
-  const connection = await pool.getConnection()
+  const connection = await pool.connect()
   try {
-    await connection.beginTransaction()
-    const [rows] = await connection.execute('SELECT id, check_in, project_date FROM work_sessions WHERE check_out IS NULL LIMIT 1 FOR UPDATE')
+    await connection.query('BEGIN')
+    const { rows } = await connection.query('SELECT id, check_in, project_date FROM public.work_sessions WHERE check_out IS NULL LIMIT 1 FOR UPDATE')
     if (!rows.length) {
-      await connection.rollback()
+      await connection.query('ROLLBACK')
       return response.status(409).json({ message: 'Không có phiên làm việc nào đang chạy.' })
     }
     const checkOut = new Date()
-    await connection.execute('UPDATE work_sessions SET check_out = ? WHERE id = ?', [checkOut, rows[0].id])
-    await connection.commit()
+    await connection.query('UPDATE public.work_sessions SET check_out = $1, updated_at = NOW() WHERE id = $2', [checkOut, rows[0].id])
+    await connection.query('COMMIT')
     const session = serializeSession({ ...rows[0], check_out: checkOut })
     response.json({ session })
   } catch (error) {
-    await connection.rollback()
+    await connection.query('ROLLBACK')
     throw error
   } finally {
     connection.release()
@@ -133,8 +133,8 @@ app.put('/api/settings', asyncRoute(async (request, response) => {
     return response.status(400).json({ message: 'Khoản income cố định không hợp lệ.' })
   }
 
-  await pool.execute(
-    'UPDATE payroll_settings SET minimum_minutes = ?, period_start_day = ?, period_end_day = ?, fixed_income = ? WHERE id = 1',
+  await pool.query(
+    'UPDATE public.payroll_settings SET minimum_minutes = $1, period_start_day = $2, period_end_day = $3, fixed_income = $4, updated_at = NOW() WHERE id = 1',
     [minimumMinutes, periodStartDay, periodEndDay, fixedIncome],
   )
   response.json({ settings: { minimumMinutes, periodStartDay, periodEndDay, fixedIncome } })
@@ -144,10 +144,10 @@ app.get('/api/payroll-summary', asyncRoute(async (request, response) => {
   const settings = await getSettings()
   const period = request.query.period || currentPeriod()
   const range = getPayrollRange(period, settings.period_start_day, settings.period_end_day)
-  const [sessions] = await pool.execute(
-    `SELECT check_in, check_out, project_date FROM work_sessions
-     WHERE (project_date BETWEEN ? AND ?)
-        OR (project_date IS NULL AND check_in < ? AND (check_out IS NULL OR check_out > ?))`,
+  const { rows: sessions } = await pool.query(
+    `SELECT check_in, check_out, project_date FROM public.work_sessions
+     WHERE (project_date BETWEEN $1 AND $2)
+        OR (project_date IS NULL AND check_in < $3 AND (check_out IS NULL OR check_out > $4))`,
     [range.startDate, range.endDate, new Date(range.endExclusive), new Date(range.start)],
   )
   const payroll = calculatePayroll(sessions, range, settings)

@@ -1,34 +1,39 @@
-CREATE DATABASE IF NOT EXISTS time_check_in
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-USE time_check_in;
-
-CREATE TABLE IF NOT EXISTS work_sessions (
-  id CHAR(36) NOT NULL PRIMARY KEY,
-  check_in TIMESTAMP(3) NOT NULL,
-  check_out TIMESTAMP(3) NULL DEFAULT NULL,
-  project_date DATE NULL,
-  active_marker TINYINT GENERATED ALWAYS AS (
-    CASE WHEN check_out IS NULL THEN 1 ELSE NULL END
-  ) STORED,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_only_one_active_session (active_marker),
-  INDEX idx_work_sessions_check_in (check_in),
-  INDEX idx_work_sessions_project_date (project_date),
+CREATE TABLE IF NOT EXISTS public.work_sessions (
+  id UUID PRIMARY KEY,
+  check_in TIMESTAMPTZ(3) NOT NULL,
+  check_out TIMESTAMPTZ(3),
+  project_date DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_checkout_after_checkin CHECK (check_out IS NULL OR check_out >= check_in)
-) ENGINE=InnoDB;
+);
 
-CREATE TABLE IF NOT EXISTS payroll_settings (
-  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-  minimum_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 360,
-  period_start_day TINYINT UNSIGNED NOT NULL DEFAULT 1,
-  period_end_day TINYINT UNSIGNED NOT NULL DEFAULT 31,
-  fixed_income DECIMAL(14, 2) UNSIGNED NOT NULL DEFAULT 0,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_only_one_active_session
+  ON public.work_sessions ((1))
+  WHERE check_out IS NULL;
 
-INSERT INTO payroll_settings (id, minimum_minutes, period_start_day, period_end_day, fixed_income)
+CREATE INDEX IF NOT EXISTS idx_work_sessions_check_in
+  ON public.work_sessions (check_in);
+
+CREATE INDEX IF NOT EXISTS idx_work_sessions_project_date
+  ON public.work_sessions (project_date);
+
+CREATE TABLE IF NOT EXISTS public.payroll_settings (
+  id SMALLINT PRIMARY KEY,
+  minimum_minutes SMALLINT NOT NULL DEFAULT 360 CHECK (minimum_minutes BETWEEN 1 AND 1440),
+  period_start_day SMALLINT NOT NULL DEFAULT 1 CHECK (period_start_day BETWEEN 1 AND 31),
+  period_end_day SMALLINT NOT NULL DEFAULT 31 CHECK (period_end_day BETWEEN 1 AND 31),
+  fixed_income NUMERIC(14, 2) NOT NULL DEFAULT 0 CHECK (fixed_income >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO public.payroll_settings (
+  id, minimum_minutes, period_start_day, period_end_day, fixed_income
+)
 VALUES (1, 360, 1, 31, 0)
-ON DUPLICATE KEY UPDATE id = id;
+ON CONFLICT (id) DO NOTHING;
+
+-- Backend kết nối trực tiếp bằng Postgres credentials. Không cấp policy cho
+-- anon/authenticated nên browser dùng publishable key không thể sửa bảng này.
+ALTER TABLE public.work_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payroll_settings ENABLE ROW LEVEL SECURITY;

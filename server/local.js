@@ -5,7 +5,7 @@ import { initializeDatabase, pool } from './db.js'
 const port = Number(process.env.PORT || 3001)
 
 try {
-  if (process.env.DB_AUTO_MIGRATE !== 'false') {
+  if (process.env.POSTGRES_AUTO_MIGRATE !== 'false') {
     await initializeDatabase()
   } else {
     await pool.query('SELECT 1')

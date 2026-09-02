@@ -1,119 +1,56 @@
-import mysql from 'mysql2'
+import { readFile } from 'node:fs/promises'
+import pg from 'pg'
 import { attachDatabasePool } from '@vercel/functions'
 
-const databaseName = process.env.DB_DATABASE || 'time_check_in'
+const { Client, Pool } = pg
 
-if (!/^[a-zA-Z0-9_]+$/.test(databaseName)) {
-  throw new Error('DB_DATABASE chỉ được chứa chữ cái, số và dấu gạch dưới.')
+function buildConnectionString() {
+  if (process.env.POSTGRES_URL) return process.env.POSTGRES_URL
+
+  const host = process.env.POSTGRES_HOST
+  const database = process.env.POSTGRES_DATABASE || 'postgres'
+  const user = process.env.POSTGRES_USER || 'postgres'
+  const password = process.env.POSTGRES_PASSWORD
+
+  if (!host || password === undefined) {
+    throw new Error('Thiếu POSTGRES_URL hoặc bộ biến POSTGRES_HOST/POSTGRES_USER/POSTGRES_PASSWORD.')
+  }
+
+  const port = Number(process.env.POSTGRES_PORT || 5432)
+  return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}?sslmode=require`
 }
 
-const sslEnabled = process.env.DB_SSL === 'true'
-const sslCa = process.env.DB_SSL_CA?.replace(/\\n/g, '\n')
-
-const connectionOptions = {
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  timezone: 'Z',
-  connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT || 10000),
-  ...(sslEnabled ? {
-    ssl: {
-      rejectUnauthorized: true,
-      ...(sslCa ? { ca: sslCa } : {}),
-    },
-  } : {}),
+function connectionConfig(connectionString) {
+  const sslCa = process.env.POSTGRES_SSL_CA?.replace(/\\n/g, '\n')
+  return {
+    connectionString,
+    ...(sslCa ? { ssl: { ca: sslCa, rejectUnauthorized: true } } : {}),
+  }
 }
 
-const connectionLimit = Number(process.env.DB_CONNECTION_LIMIT || 5)
-const rawPool = mysql.createPool({
-  ...connectionOptions,
-  database: databaseName,
-  waitForConnections: true,
-  connectionLimit,
-  maxIdle: connectionLimit,
-  idleTimeout: Number(process.env.DB_IDLE_TIMEOUT || 10000),
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0,
+export const pool = new Pool({
+  ...connectionConfig(buildConnectionString()),
+  max: Number(process.env.POSTGRES_POOL_MAX || 5),
+  idleTimeoutMillis: Number(process.env.POSTGRES_IDLE_TIMEOUT || 10000),
+  connectionTimeoutMillis: Number(process.env.POSTGRES_CONNECT_TIMEOUT || 10000),
+  allowExitOnIdle: !process.env.VERCEL,
 })
 
-export const pool = rawPool.promise()
-
 if (process.env.VERCEL) {
-  attachDatabasePool(rawPool)
+  attachDatabasePool(pool)
 }
 
 export async function initializeDatabase() {
-  const bootstrap = mysql.createConnection(connectionOptions).promise()
-  await bootstrap.query(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
-  await bootstrap.end()
+  const migrationUrl = process.env.POSTGRES_URL_NON_POOLING || buildConnectionString()
+  const client = new Client(connectionConfig(migrationUrl))
+  const schema = await readFile(new URL('./schema.sql', import.meta.url), 'utf8')
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS work_sessions (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      check_in TIMESTAMP(3) NOT NULL,
-      check_out TIMESTAMP(3) NULL DEFAULT NULL,
-      project_date DATE NULL,
-      active_marker TINYINT GENERATED ALWAYS AS (
-        CASE WHEN check_out IS NULL THEN 1 ELSE NULL END
-      ) STORED,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY uq_only_one_active_session (active_marker),
-      INDEX idx_work_sessions_check_in (check_in),
-      INDEX idx_work_sessions_project_date (project_date),
-      CONSTRAINT chk_checkout_after_checkin CHECK (check_out IS NULL OR check_out >= check_in)
-    ) ENGINE=InnoDB
-  `)
-
-  const [sessionColumns] = await pool.execute(
-    'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
-    [databaseName, 'work_sessions', 'project_date'],
-  )
-  if (!sessionColumns.length) {
-    await pool.query('ALTER TABLE work_sessions ADD COLUMN project_date DATE NULL AFTER check_out')
+  await client.connect()
+  try {
+    await client.query(schema)
+  } finally {
+    await client.end()
   }
-  const [projectDateIndexes] = await pool.execute(
-    'SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?',
-    [databaseName, 'work_sessions', 'idx_work_sessions_project_date'],
-  )
-  if (!projectDateIndexes.length) {
-    await pool.query('CREATE INDEX idx_work_sessions_project_date ON work_sessions (project_date)')
-  }
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS payroll_settings (
-      id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-      minimum_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 360,
-      period_start_day TINYINT UNSIGNED NOT NULL DEFAULT 1,
-      period_end_day TINYINT UNSIGNED NOT NULL DEFAULT 31,
-      fixed_income DECIMAL(14, 2) UNSIGNED NOT NULL DEFAULT 0,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB
-  `)
-
-
-  const [incomeColumns] = await pool.execute(
-    'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
-    [databaseName, 'payroll_settings', 'fixed_income'],
-  )
-  if (!incomeColumns.length) {
-    await pool.query('ALTER TABLE payroll_settings ADD COLUMN fixed_income DECIMAL(14, 2) UNSIGNED NOT NULL DEFAULT 0 AFTER period_end_day')
-    const [legacyColumns] = await pool.execute(
-      'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
-      [databaseName, 'payroll_settings', 'daily_rate'],
-    )
-    if (legacyColumns.length) {
-      await pool.query('UPDATE payroll_settings SET fixed_income = daily_rate WHERE fixed_income = 0')
-    }
-  }
-
-  await pool.execute(`
-    INSERT INTO payroll_settings (id, minimum_minutes, period_start_day, period_end_day, fixed_income)
-    VALUES (1, 360, 1, 31, 0)
-    ON DUPLICATE KEY UPDATE id = id
-  `)
 }
 
 export function serializeSession(row) {
