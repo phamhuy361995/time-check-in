@@ -20,11 +20,37 @@ function buildConnectionString() {
   return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}?sslmode=require`
 }
 
-function connectionConfig(connectionString) {
+function normalizeConnectionString(connectionString) {
+  const url = new URL(connectionString)
+  const sslMode = url.searchParams.get('sslmode')
+
+  // node-postgres replaces the explicit `ssl` object when these options are
+  // present in the URL, so SSL is configured in one place below.
+  for (const parameter of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert']) {
+    url.searchParams.delete(parameter)
+  }
+
+  return { connectionString: url.toString(), sslMode }
+}
+
+export function connectionConfig(rawConnectionString) {
+  const normalized = normalizeConnectionString(rawConnectionString)
   const sslCa = process.env.POSTGRES_SSL_CA?.replace(/\\n/g, '\n')
+  const sslMode = (process.env.POSTGRES_SSL_MODE || normalized.sslMode || 'require').toLowerCase()
+
+  if (sslMode === 'disable') {
+    return { connectionString: normalized.connectionString, ssl: false }
+  }
+
+  if (['verify-ca', 'verify-full'].includes(sslMode) && !sslCa) {
+    throw new Error(`POSTGRES_SSL_CA là bắt buộc khi POSTGRES_SSL_MODE=${sslMode}.`)
+  }
+
   return {
-    connectionString,
-    ...(sslCa ? { ssl: { ca: sslCa, rejectUnauthorized: true } } : {}),
+    connectionString: normalized.connectionString,
+    ssl: sslCa
+      ? { ca: sslCa, rejectUnauthorized: true }
+      : { rejectUnauthorized: false },
   }
 }
 

@@ -58,7 +58,7 @@ Dự án dùng hai Vercel Project từ cùng một Git repository:
    - Không cấu hình Build Command hay Output Directory.
    - Runtime database URL: `POSTGRES_URL` từ Supabase Transaction pooler.
    - Migration URL: `POSTGRES_URL_NON_POOLING`.
-   - Các biến còn lại: `POSTGRES_POOL_MAX`, `POSTGRES_IDLE_TIMEOUT`, `POSTGRES_CONNECT_TIMEOUT`, `POSTGRES_SSL_CA` (tùy chọn), `APP_TIMEZONE_OFFSET_MINUTES`, `CLIENT_ORIGINS`.
+   - Các biến còn lại: `POSTGRES_POOL_MAX`, `POSTGRES_IDLE_TIMEOUT`, `POSTGRES_CONNECT_TIMEOUT`, `POSTGRES_SSL_MODE=require`, `POSTGRES_SSL_CA` (chỉ cần cho `verify-full`), `APP_TIMEZONE_OFFSET_MINUTES`, `CLIENT_ORIGINS`.
    - Không cần `PORT` và `POSTGRES_AUTO_MIGRATE` trên Vercel. Chạy `backend/schema.sql` trong Supabase SQL Editor trước khi deploy.
 
 2. **Frontend Project**
