@@ -40,6 +40,10 @@ function isValidProjectDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
+app.get('/', (_request, response) => {
+  response.json({ name: 'Tempo API', status: 'ok', health: '/api/health' })
+})
+
 app.get('/api/health', asyncRoute(async (_request, response) => {
   await pool.query('SELECT 1')
   response.json({ status: 'ok', database: 'supabase-postgres-connected' })
