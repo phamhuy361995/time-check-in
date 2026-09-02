@@ -1,0 +1,166 @@
+import 'dotenv/config'
+import { randomUUID } from 'node:crypto'
+import cors from 'cors'
+import express from 'express'
+import { initializeDatabase, pool, serializeSession } from './db.js'
+import { calculatePayroll, currentPeriod, getPayrollRange } from './payroll.js'
+
+const app = express()
+const port = Number(process.env.PORT || 3001)
+
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }))
+app.use(express.json())
+
+function asyncRoute(handler) {
+  return (request, response, next) => Promise.resolve(handler(request, response, next)).catch(next)
+}
+
+async function getSettings() {
+  const [rows] = await pool.execute('SELECT minimum_minutes, period_start_day, period_end_day, fixed_income FROM payroll_settings WHERE id = 1')
+  return rows[0]
+}
+
+function isValidProjectDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false
+  const date = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+app.get('/api/health', asyncRoute(async (_request, response) => {
+  await pool.query('SELECT 1')
+  response.json({ status: 'ok', database: 'connected' })
+}))
+
+app.get('/api/sessions', asyncRoute(async (request, response) => {
+  const conditions = []
+  const values = []
+
+  if (request.query.from) {
+    const from = new Date(request.query.from)
+    if (Number.isNaN(from.getTime())) return response.status(400).json({ message: 'Thời gian bắt đầu không hợp lệ.' })
+    conditions.push('(check_out IS NULL OR check_out >= ?)')
+    values.push(from)
+  }
+  if (request.query.to) {
+    const to = new Date(request.query.to)
+    if (Number.isNaN(to.getTime())) return response.status(400).json({ message: 'Thời gian kết thúc không hợp lệ.' })
+    conditions.push('check_in <= ?')
+    values.push(to)
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const [rows] = await pool.execute(`SELECT id, check_in, check_out, project_date FROM work_sessions ${where} ORDER BY check_in DESC`, values)
+  response.json({ sessions: rows.map(serializeSession) })
+}))
+
+app.post('/api/sessions/check-in', asyncRoute(async (request, response) => {
+  const projectDate = request.body.projectDate
+  if (!isValidProjectDate(projectDate)) {
+    return response.status(400).json({ message: 'Vui lòng chọn ngày tham gia dự án hợp lệ.' })
+  }
+  const id = randomUUID()
+  const checkIn = new Date()
+  try {
+    await pool.execute('INSERT INTO work_sessions (id, check_in, project_date) VALUES (?, ?, ?)', [id, checkIn, projectDate])
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return response.status(409).json({ message: 'Bạn đang có một phiên làm việc chưa check out.' })
+    }
+    throw error
+  }
+  response.status(201).json({ session: { id, start: checkIn.getTime(), end: null, projectDate } })
+}))
+
+app.post('/api/sessions/check-out', asyncRoute(async (_request, response) => {
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [rows] = await connection.execute('SELECT id, check_in, project_date FROM work_sessions WHERE check_out IS NULL LIMIT 1 FOR UPDATE')
+    if (!rows.length) {
+      await connection.rollback()
+      return response.status(409).json({ message: 'Không có phiên làm việc nào đang chạy.' })
+    }
+    const checkOut = new Date()
+    await connection.execute('UPDATE work_sessions SET check_out = ? WHERE id = ?', [checkOut, rows[0].id])
+    await connection.commit()
+    const session = serializeSession({ ...rows[0], check_out: checkOut })
+    response.json({ session })
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}))
+
+app.get('/api/settings', asyncRoute(async (_request, response) => {
+  const settings = await getSettings()
+  response.json({
+    minimumMinutes: settings.minimum_minutes,
+    periodStartDay: settings.period_start_day,
+    periodEndDay: settings.period_end_day,
+    fixedIncome: Number(settings.fixed_income),
+  })
+}))
+
+app.put('/api/settings', asyncRoute(async (request, response) => {
+  const minimumMinutes = Number(request.body.minimumMinutes)
+  const periodStartDay = Number(request.body.periodStartDay)
+  const periodEndDay = Number(request.body.periodEndDay)
+  const fixedIncome = Number(request.body.fixedIncome)
+
+  if (!Number.isInteger(minimumMinutes) || minimumMinutes < 1 || minimumMinutes > 1440) {
+    return response.status(400).json({ message: 'Số phút tối thiểu phải từ 1 đến 1440.' })
+  }
+  if (![periodStartDay, periodEndDay].every((day) => Number.isInteger(day) && day >= 1 && day <= 31)) {
+    return response.status(400).json({ message: 'Ngày bắt đầu và kết thúc phải từ 1 đến 31.' })
+  }
+  if (!Number.isFinite(fixedIncome) || fixedIncome < 0 || fixedIncome > 99999999999999) {
+    return response.status(400).json({ message: 'Khoản income cố định không hợp lệ.' })
+  }
+
+  await pool.execute(
+    'UPDATE payroll_settings SET minimum_minutes = ?, period_start_day = ?, period_end_day = ?, fixed_income = ? WHERE id = 1',
+    [minimumMinutes, periodStartDay, periodEndDay, fixedIncome],
+  )
+  response.json({ settings: { minimumMinutes, periodStartDay, periodEndDay, fixedIncome } })
+}))
+
+app.get('/api/payroll-summary', asyncRoute(async (request, response) => {
+  const settings = await getSettings()
+  const period = request.query.period || currentPeriod()
+  const range = getPayrollRange(period, settings.period_start_day, settings.period_end_day)
+  const [sessions] = await pool.execute(
+    `SELECT check_in, check_out, project_date FROM work_sessions
+     WHERE (project_date BETWEEN ? AND ?)
+        OR (project_date IS NULL AND check_in < ? AND (check_out IS NULL OR check_out > ?))`,
+    [range.startDate, range.endDate, new Date(range.endExclusive), new Date(range.start)],
+  )
+  const payroll = calculatePayroll(sessions, range, settings)
+
+  response.json({
+    period,
+    range: { startDate: range.startDate, endDate: range.endDate },
+    settings: {
+      minimumMinutes: settings.minimum_minutes,
+      periodStartDay: settings.period_start_day,
+      periodEndDay: settings.period_end_day,
+      fixedIncome: Number(settings.fixed_income),
+    },
+    ...payroll,
+  })
+}))
+
+app.use((error, _request, response, _next) => {
+  console.error(error)
+  response.status(500).json({ message: 'Máy chủ gặp lỗi. Vui lòng thử lại.' })
+})
+
+initializeDatabase()
+  .then(() => {
+    app.listen(port, () => console.log(`Tempo API đang chạy tại http://localhost:${port}`))
+  })
+  .catch((error) => {
+    console.error('Không thể kết nối MySQL:', error.message)
+    process.exit(1)
+  })
