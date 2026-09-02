@@ -8,22 +8,17 @@
   },
   "scripts": {
     "dev": "vite",
-    "dev:server": "node --watch server/local.js",
+    "dev:server": "node --watch backend/local.js",
     "dev:all": "concurrently -n WEB,API -c cyan,magenta \"npm run dev\" \"npm run dev:server\"",
-    "server": "node server/local.js",
-    "build:server": "node --check server.js && node --check server/app.js && node --check server/db.js && node --check server/payroll.js && node --check server/local.js",
+    "server": "node backend/local.js",
+    "build:server": "npm --prefix backend run check",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vercel/functions": "^3.4.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "lucide-react": "^0.468.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^5.1.0",
-    "pg": "^8.13.1"
+    "lucide-react": "^0.468.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

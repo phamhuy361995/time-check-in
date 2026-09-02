@@ -11,10 +11,11 @@
 
 ```bash
 npm install
+npm --prefix backend install
 Copy-Item .env.example .env
 ```
 
-Cập nhật `POSTGRES_URL` và `POSTGRES_URL_NON_POOLING` trong `.env`. Có thể chạy [server/schema.sql](server/schema.sql) bằng Supabase SQL Editor; khi chạy local, `POSTGRES_AUTO_MIGRATE=true` cũng sẽ tự tạo/cập nhật các bảng.
+Cập nhật `POSTGRES_URL` và `POSTGRES_URL_NON_POOLING` trong `.env`. Có thể chạy [backend/schema.sql](backend/schema.sql) bằng Supabase SQL Editor; khi chạy local, `POSTGRES_AUTO_MIGRATE=true` cũng sẽ tự tạo/cập nhật các bảng.
 
 Khởi động frontend và backend cùng lúc:
 
@@ -52,13 +53,13 @@ Dự án dùng hai Vercel Project từ cùng một Git repository:
 
 1. **Backend Project**
    - Framework Preset: `Express`.
-   - Root Directory: thư mục gốc repository.
+   - Root Directory: `backend`.
    - Entrypoint: `server.js` (Vercel tự nhận diện).
    - Không cấu hình Build Command hay Output Directory.
    - Runtime database URL: `POSTGRES_URL` từ Supabase Transaction pooler.
    - Migration URL: `POSTGRES_URL_NON_POOLING`.
    - Các biến còn lại: `POSTGRES_POOL_MAX`, `POSTGRES_IDLE_TIMEOUT`, `POSTGRES_CONNECT_TIMEOUT`, `POSTGRES_SSL_CA` (tùy chọn), `APP_TIMEZONE_OFFSET_MINUTES`, `CLIENT_ORIGINS`.
-   - Không cần `PORT` và `POSTGRES_AUTO_MIGRATE` trên Vercel. Chạy `server/schema.sql` trong Supabase SQL Editor trước khi deploy.
+   - Không cần `PORT` và `POSTGRES_AUTO_MIGRATE` trên Vercel. Chạy `backend/schema.sql` trong Supabase SQL Editor trước khi deploy.
 
 2. **Frontend Project**
    - Framework Preset: `Vite`.
@@ -77,7 +78,7 @@ Nếu có nhiều frontend domain hoặc Preview URL, phân cách bằng dấu p
 
 ### Cấu hình build cho Backend Project
 
-- Node.js Version: `24.x` (đồng thời được cố định bằng `engines.node` trong `package.json`).
+- Node.js Version: `22.x` (đồng thời được cố định bằng `engines.node` trong `backend/package.json`).
 - Framework Preset: `Express`.
 - Build Command: để trống và tắt `Override`.
 - Output Directory: để trống và tắt `Override`.
@@ -92,7 +93,7 @@ npm run build:server
 Deploy production bằng Vercel CLI:
 
 ```bash
-npx vercel --prod
+npx vercel --cwd backend --prod
 ```
 
-Nếu log dừng ở lỗi nội bộ `Cannot read properties of undefined (reading 'fsPath')`, kiểm tra lại Framework Preset là `Express`, xóa mọi Build Command/Output Directory đã override, rồi chọn **Redeploy without cache**. Frontend Project vẫn dùng preset `Vite`, lệnh `npm run build` và output `dist`.
+Nếu log dừng ở lỗi nội bộ `Cannot read properties of undefined (reading 'fsPath')`, kiểm tra Backend Project đang dùng Root Directory `backend`, Framework Preset `Express`, đồng thời xóa mọi Build Command/Output Directory đã override rồi chọn **Redeploy without cache**. Frontend Project vẫn dùng Root Directory là thư mục gốc, preset `Vite`, lệnh `npm run build` và output `dist`.

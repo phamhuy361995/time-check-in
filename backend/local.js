@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import app from '../server.js'
+import app from './server.js'
 import { initializeDatabase, pool } from './db.js'
 
 const port = Number(process.env.PORT || 3001)
