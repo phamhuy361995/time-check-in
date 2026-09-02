@@ -5,8 +5,8 @@ import express from 'express'
 import { pool, serializeSession } from './db.js'
 import { calculatePayroll, currentPeriod, getPayrollRange } from './payroll.js'
 
-const app = express()
-app.disable('x-powered-by')
+export function configureApp(app) {
+  app.disable('x-powered-by')
 const allowedOrigins = (process.env.CLIENT_ORIGINS || process.env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
@@ -171,5 +171,4 @@ app.use((error, _request, response, _next) => {
     message: error.status === 403 ? error.message : 'Máy chủ gặp lỗi. Vui lòng thử lại.',
   })
 })
-
-export default app
+}

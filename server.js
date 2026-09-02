@@ -1,7 +1,9 @@
 import express from 'express'
-import app from './server/app.js'
+import { configureApp } from './server/app.js'
 
-// Vercel nhận diện file server.js ở thư mục gốc và đóng gói Express
-// thành một Vercel Function. Không gọi app.listen() trong entrypoint này.
-void express
+// Keep the Express app creation in Vercel's detected entrypoint. Vercel then
+// discovers the routes and bundles this file as one serverless function.
+const app = express()
+configureApp(app)
+
 export default app

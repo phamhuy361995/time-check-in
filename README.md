@@ -4,7 +4,7 @@
 
 ## Yêu cầu
 
-- Node.js 20+
+- Node.js 24
 - Một Supabase Project
 
 ## Cài đặt
@@ -74,3 +74,25 @@ CLIENT_ORIGINS=https://<frontend-project>.vercel.app
 ```
 
 Nếu có nhiều frontend domain hoặc Preview URL, phân cách bằng dấu phẩy. Sau khi đổi Environment Variables, redeploy cả project liên quan. Frontend sẽ gọi `${VITE_API_URL}/api/...`; local development vẫn dùng Vite proxy khi `VITE_API_URL` để trống.
+
+### Cấu hình build cho Backend Project
+
+- Node.js Version: `24.x` (đồng thời được cố định bằng `engines.node` trong `package.json`).
+- Framework Preset: `Express`.
+- Build Command: để trống và tắt `Override`.
+- Output Directory: để trống và tắt `Override`.
+- Install Command: để Vercel tự động chọn `npm install`.
+
+Express được Vercel tự động đóng gói từ `server.js`, vì vậy không chạy `node server.js`, `npm run server` hay `npm run build` làm Build Command của Backend Project. Có thể kiểm tra cú pháp các file server trước khi deploy:
+
+```bash
+npm run build:server
+```
+
+Deploy production bằng Vercel CLI:
+
+```bash
+npx vercel --prod
+```
+
+Nếu log dừng ở lỗi nội bộ `Cannot read properties of undefined (reading 'fsPath')`, kiểm tra lại Framework Preset là `Express`, xóa mọi Build Command/Output Directory đã override, rồi chọn **Redeploy without cache**. Frontend Project vẫn dùng preset `Vite`, lệnh `npm run build` và output `dist`.

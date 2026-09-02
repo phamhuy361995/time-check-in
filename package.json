@@ -11,6 +11,7 @@
     "dev:server": "node --watch server/local.js",
     "dev:all": "concurrently -n WEB,API -c cyan,magenta \"npm:dev\" \"npm:dev:server\"",
     "server": "node server/local.js",
+    "build:server": "node --check server.js && node --check server/app.js && node --check server/db.js && node --check server/payroll.js && node --check server/local.js",
     "build": "vite build",
     "preview": "vite preview"
   },
