@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react'
-import { DAY_TARGET, formatDuration } from '../../utils/time'
+import { DAILY_TARGET_HOURS, DAY_TARGET, formatDuration } from '../../utils/time'
 
 export default function FocusCard({ todayTotal }) {
   const remaining = Math.max(0, DAY_TARGET - todayTotal)
@@ -11,7 +11,7 @@ export default function FocusCard({ todayTotal }) {
         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-[#fff1eb] text-coral"><Sparkles size={18} /></div>
         <div>
           <p className="text-sm font-bold">Mục tiêu hôm nay</p>
-          <p className="text-xs text-stone-400">8 giờ làm việc</p>
+          <p className="text-xs text-stone-400">{DAILY_TARGET_HOURS} giờ làm việc</p>
         </div>
       </div>
       <div className="mt-6 h-2 overflow-hidden rounded-full bg-stone-100">

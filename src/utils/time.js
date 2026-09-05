@@ -1,4 +1,5 @@
-export const DAY_TARGET = 8 * 60 * 60 * 1000
+export const DAILY_TARGET_HOURS = 6
+export const DAY_TARGET = DAILY_TARGET_HOURS * 60 * 60 * 1000
 
 export function startOfDay(date) {
   const value = new Date(date)

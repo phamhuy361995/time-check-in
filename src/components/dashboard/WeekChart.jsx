@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { DAY_TARGET, endOfDay, formatDuration, overlapDuration, startOfDay } from '../../utils/time'
+import { DAILY_TARGET_HOURS, DAY_TARGET, endOfDay, formatDuration, overlapDuration, startOfDay } from '../../utils/time'
 
 export default function WeekChart({ sessions, now }) {
   const days = useMemo(() => {
@@ -25,7 +25,7 @@ export default function WeekChart({ sessions, now }) {
           <p className="font-bold">7 ngày gần nhất</p>
           <p className="mt-1 text-xs text-stone-400">Tổng {formatDuration(weekTotal)}</p>
         </div>
-        <div className="rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-500">Mục tiêu 8g</div>
+        <div className="rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-500">Mục tiêu {DAILY_TARGET_HOURS}g</div>
       </div>
       <div className="mt-7 flex h-36 items-end justify-between gap-2 sm:gap-3">
         {days.map((day, index) => {
