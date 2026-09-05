@@ -4,7 +4,7 @@
 
 ## Yêu cầu
 
-- Node.js 24
+- Node.js 22
 - Một Supabase Project
 
 ## Cài đặt
@@ -30,22 +30,41 @@ npm run dev:all
 ## Tính năng
 
 - Check in để bắt đầu một phiên làm việc và check out để kết thúc.
-- Bộ đếm thời gian theo thời gian thực.
-- Tổng thời gian, mục tiêu trong ngày và biểu đồ 7 ngày.
+- Bổ sung phiên còn thiếu hoặc cập nhật giờ check in/out của phiên đã hoàn thành.
+- Đánh dấu từng phiên là ngày dự án hoặc ngoài dự án. Ngày ngoài dự án vẫn cộng giờ làm nhưng không tham gia tính income.
+- Bộ đếm thời gian theo thời gian thực, tổng thời gian, mục tiêu trong ngày và biểu đồ 7 ngày.
 - Phiên làm việc và cài đặt được lưu trong Supabase PostgreSQL.
 - Một ngày được tính công khi đạt ngưỡng tùy chỉnh, mặc định tối thiểu 6 giờ.
 - Cấu hình chu kỳ công theo ngày bắt đầu/kết thúc hàng tháng, ví dụ 26 → 25.
-- Chọn ngày tham gia dự án trước mỗi lần check in; ngày này được lưu cùng phiên làm việc.
-- Cấu hình một khoản income cố định và phân bổ đều cho các ngày tham gia dự án trong kỳ.
+- Cấu hình một khoản income cố định và phân bổ đều cho các ngày có tham gia dự án trong kỳ.
 - Giao diện responsive từ điện thoại đến desktop.
+
+## Cấu trúc frontend
+
+```text
+src/
+├── components/
+│   ├── dashboard/   # Check-in, tổng thời gian, biểu đồ và mục tiêu
+│   ├── layout/      # Header, sidebar, mobile drawer và thông báo
+│   └── sessions/    # Danh sách và form bổ sung/cập nhật phiên
+├── config/          # Cấu hình điều hướng
+├── pages/           # Overview, History, Statistics và Payroll
+├── utils/           # Hàm xử lý thời gian và định dạng
+├── api.js           # API client
+└── App.jsx          # State, API actions và điều phối page
+```
 
 ## API chính
 
 - `GET /api/sessions`: danh sách phiên làm việc.
-- `POST /api/sessions/check-in`: bắt đầu phiên, body gồm `projectDate` theo định dạng `YYYY-MM-DD`.
+- `POST /api/sessions`: bổ sung một phiên đã hoàn thành; body gồm `date`, `checkIn`, `checkOut`, `isProjectDay`.
+- `PUT /api/sessions/:id`: cập nhật thời gian và trạng thái ngày dự án của một phiên đã hoàn thành.
+- `POST /api/sessions/check-in`: bắt đầu phiên; body gồm `projectDate` và `isProjectDay`.
 - `POST /api/sessions/check-out`: kết thúc phiên hiện tại.
 - `GET /api/settings`, `PUT /api/settings`: đọc/cập nhật cấu hình tính công.
-- `GET /api/payroll-summary?period=2026-09`: tổng hợp ngày công của kỳ.
+- `GET /api/payroll-summary?period=2026-09`: tổng hợp ngày công và income của kỳ.
+
+API từ chối phiên có giờ check out trước giờ check in, thời gian trong tương lai, hoặc trùng với một phiên đã có.
 
 ## Deploy frontend và backend trên Vercel
 

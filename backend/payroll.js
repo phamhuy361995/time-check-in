@@ -53,6 +53,7 @@ export function calculatePayroll(sessions, range, settings, now = Date.now()) {
 
   while (cursor < range.endExclusive) {
     const dayEnd = Math.min(cursor + 24 * 60 * 60 * 1000, range.endExclusive)
+    let projectDay = false
     const totalMs = sessions.reduce((sum, session) => {
       const sessionStart = new Date(session.check_in).getTime()
       const sessionEnd = session.check_out ? new Date(session.check_out).getTime() : now
@@ -60,7 +61,10 @@ export function calculatePayroll(sessions, range, settings, now = Date.now()) {
         ? (typeof session.project_date === 'string' ? session.project_date.slice(0, 10) : new Date(session.project_date).toISOString().slice(0, 10))
         : null
       if (projectDate) {
-        return projectDate === localDateLabel(cursor) ? sum + Math.max(0, sessionEnd - sessionStart) : sum
+        if (projectDate !== localDateLabel(cursor)) return sum
+        const duration = Math.max(0, sessionEnd - sessionStart)
+        if (duration > 0) projectDay = true
+        return sum + duration
       }
       return sum + Math.max(0, Math.min(sessionEnd, dayEnd) - Math.max(sessionStart, cursor))
     }, 0)
@@ -68,12 +72,13 @@ export function calculatePayroll(sessions, range, settings, now = Date.now()) {
     days.push({
       date: localDateLabel(cursor),
       totalMinutes,
+      projectDay,
       qualified: totalMinutes >= settings.minimum_minutes,
     })
     cursor = dayEnd
   }
 
-  const participationDays = days.filter((day) => day.totalMinutes > 0).length
+  const participationDays = days.filter((day) => day.projectDay).length
   const qualifiedDays = days.filter((day) => day.qualified).length
   const totalMinutes = days.reduce((sum, day) => sum + day.totalMinutes, 0)
   const fixedIncome = Number(settings.fixed_income)
@@ -82,7 +87,7 @@ export function calculatePayroll(sessions, range, settings, now = Date.now()) {
   return {
     days: days.map((day) => ({
       ...day,
-      allocatedIncome: day.totalMinutes > 0 ? incomePerDay : 0,
+      allocatedIncome: day.projectDay ? incomePerDay : 0,
     })),
     participationDays,
     qualifiedDays,

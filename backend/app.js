@@ -40,6 +40,55 @@ function isValidProjectDate(value) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
+function localDateFor(timestamp) {
+  const offsetMinutes = Number(process.env.APP_TIMEZONE_OFFSET_MINUTES || 420)
+  return new Date(timestamp.getTime() + offsetMinutes * 60 * 1000).toISOString().slice(0, 10)
+}
+
+function parseCompletedSession(body = {}) {
+  const workDate = body.date
+  const checkIn = new Date(body.checkIn)
+  const checkOut = new Date(body.checkOut)
+
+  if (!isValidProjectDate(workDate)) {
+    return { error: 'Ngày làm việc không hợp lệ.' }
+  }
+  if (typeof body.isProjectDay !== 'boolean') {
+    return { error: 'Vui lòng xác định đây có phải ngày dự án hay không.' }
+  }
+  if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) {
+    return { error: 'Giờ check in hoặc check out không hợp lệ.' }
+  }
+  if (checkOut <= checkIn) {
+    return { error: 'Giờ check out phải sau giờ check in.' }
+  }
+  if (checkOut.getTime() > Date.now() + 60000) {
+    return { error: 'Không thể bổ sung thời gian làm việc trong tương lai.' }
+  }
+  if (localDateFor(checkIn) !== workDate || localDateFor(checkOut) !== workDate) {
+    return { error: 'Check in và check out phải nằm trong ngày đã chọn.' }
+  }
+
+  return {
+    checkIn,
+    checkOut,
+    projectDate: body.isProjectDay ? workDate : null,
+  }
+}
+
+async function hasOverlappingSession(checkIn, checkOut, excludedId = null) {
+  const { rowCount } = await pool.query(
+    `SELECT 1
+       FROM public.work_sessions
+      WHERE check_in < $2
+        AND COALESCE(check_out, 'infinity'::timestamptz) > $1
+        AND ($3::uuid IS NULL OR id <> $3::uuid)
+      LIMIT 1`,
+    [checkIn, checkOut, excludedId],
+  )
+  return rowCount > 0
+}
+
 app.get('/', (_request, response) => {
   response.json({ name: 'Tempo API', status: 'ok', health: '/api/health' })
 })
@@ -72,8 +121,10 @@ app.get('/api/sessions', asyncRoute(async (request, response) => {
 }))
 
 app.post('/api/sessions/check-in', asyncRoute(async (request, response) => {
-  const projectDate = request.body.projectDate
-  if (!isValidProjectDate(projectDate)) {
+  const body = request.body || {}
+  const isProjectDay = body.isProjectDay !== false
+  const projectDate = isProjectDay ? body.projectDate : null
+  if (isProjectDay && !isValidProjectDate(projectDate)) {
     return response.status(400).json({ message: 'Vui lòng chọn ngày tham gia dự án hợp lệ.' })
   }
   const id = randomUUID()
@@ -87,6 +138,45 @@ app.post('/api/sessions/check-in', asyncRoute(async (request, response) => {
     throw error
   }
   response.status(201).json({ session: { id, start: checkIn.getTime(), end: null, projectDate } })
+}))
+
+app.post('/api/sessions', asyncRoute(async (request, response) => {
+  const input = parseCompletedSession(request.body)
+  if (input.error) return response.status(400).json({ message: input.error })
+  if (await hasOverlappingSession(input.checkIn, input.checkOut)) {
+    return response.status(409).json({ message: 'Khoảng thời gian này trùng với một phiên làm việc đã có.' })
+  }
+
+  const id = randomUUID()
+  const { rows } = await pool.query(
+    `INSERT INTO public.work_sessions (id, check_in, check_out, project_date)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, check_in, check_out, project_date`,
+    [id, input.checkIn, input.checkOut, input.projectDate],
+  )
+  response.status(201).json({ session: serializeSession(rows[0]) })
+}))
+
+app.put('/api/sessions/:id', asyncRoute(async (request, response) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.params.id)) {
+    return response.status(400).json({ message: 'Mã phiên làm việc không hợp lệ.' })
+  }
+
+  const input = parseCompletedSession(request.body)
+  if (input.error) return response.status(400).json({ message: input.error })
+  if (await hasOverlappingSession(input.checkIn, input.checkOut, request.params.id)) {
+    return response.status(409).json({ message: 'Khoảng thời gian này trùng với một phiên làm việc đã có.' })
+  }
+
+  const { rows } = await pool.query(
+    `UPDATE public.work_sessions
+        SET check_in = $1, check_out = $2, project_date = $3, updated_at = NOW()
+      WHERE id = $4
+      RETURNING id, check_in, check_out, project_date`,
+    [input.checkIn, input.checkOut, input.projectDate, request.params.id],
+  )
+  if (!rows.length) return response.status(404).json({ message: 'Không tìm thấy phiên làm việc.' })
+  response.json({ session: serializeSession(rows[0]) })
 }))
 
 app.post('/api/sessions/check-out', asyncRoute(async (_request, response) => {

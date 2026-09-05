@@ -12,8 +12,10 @@ async function request(path, options) {
 
 export const api = {
   getSessions: () => request('/api/sessions'),
-  checkIn: (projectDate) => request('/api/sessions/check-in', { method: 'POST', body: JSON.stringify({ projectDate }) }),
+  checkIn: (projectDate, isProjectDay = true) => request('/api/sessions/check-in', { method: 'POST', body: JSON.stringify({ projectDate, isProjectDay }) }),
   checkOut: () => request('/api/sessions/check-out', { method: 'POST' }),
+  createSession: (session) => request('/api/sessions', { method: 'POST', body: JSON.stringify(session) }),
+  updateSession: (id, session) => request(`/api/sessions/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(session) }),
   getSettings: () => request('/api/settings'),
   updateSettings: (settings) => request('/api/settings', { method: 'PUT', body: JSON.stringify(settings) }),
   getPayroll: (period) => request(`/api/payroll-summary?period=${encodeURIComponent(period)}`),
