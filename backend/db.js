@@ -80,13 +80,17 @@ export async function initializeDatabase() {
 }
 
 export function serializeSession(row) {
-  const projectDate = row.project_date
+  const selectedDate = row.project_date
     ? (typeof row.project_date === 'string' ? row.project_date.slice(0, 10) : new Date(row.project_date).toISOString().slice(0, 10))
-    : null
+    : new Date(new Date(row.check_in).getTime() + Number(process.env.APP_TIMEZONE_OFFSET_MINUTES || 420) * 60000).toISOString().slice(0, 10)
+  const isProjectDay = row.is_project_day == null ? Boolean(row.project_date) : Boolean(row.is_project_day)
+
   return {
     id: row.id,
     start: new Date(row.check_in).getTime(),
     end: row.check_out ? new Date(row.check_out).getTime() : null,
-    projectDate,
+    workDate: selectedDate,
+    isProjectDay,
+    projectDate: isProjectDay ? selectedDate : null,
   }
 }

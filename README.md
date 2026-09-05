@@ -59,12 +59,14 @@ src/
 - `GET /api/sessions`: danh sách phiên làm việc.
 - `POST /api/sessions`: bổ sung một phiên đã hoàn thành; body gồm `date`, `checkIn`, `checkOut`, `isProjectDay`.
 - `PUT /api/sessions/:id`: cập nhật thời gian và trạng thái ngày dự án của một phiên đã hoàn thành.
-- `POST /api/sessions/check-in`: bắt đầu phiên; body gồm `projectDate` và `isProjectDay`.
+- `POST /api/sessions/check-in`: bắt đầu phiên; body gồm `workDate` và `isProjectDay`. Ngày làm việc luôn được lưu dù không phải ngày dự án.
 - `POST /api/sessions/check-out`: kết thúc phiên hiện tại.
 - `GET /api/settings`, `PUT /api/settings`: đọc/cập nhật cấu hình tính công.
 - `GET /api/payroll-summary?period=2026-09`: tổng hợp ngày công và income của kỳ.
 
 API từ chối phiên có giờ check out trước giờ check in, thời gian trong tương lai, hoặc trùng với một phiên đã có.
+
+Khi cập nhật từ phiên bản cũ, chạy lại `backend/schema.sql` trong Supabase SQL Editor để bổ sung cột `is_project_day` và chuyển đổi dữ liệu hiện có trước khi deploy backend mới.
 
 ## Deploy frontend và backend trên Vercel
 

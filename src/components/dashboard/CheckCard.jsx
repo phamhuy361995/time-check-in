@@ -1,7 +1,7 @@
 import { LoaderCircle, LogIn, LogOut } from 'lucide-react'
-import { DAY_TARGET, formatDuration, formatProjectDate, formatTime } from '../../utils/time'
+import { DAY_TARGET, formatDate, formatDuration, formatTime } from '../../utils/time'
 
-export default function CheckCard({ activeSession, now, todayTotal, onToggle, loading, projectDate, setProjectDate, isProjectDay, setIsProjectDay }) {
+export default function CheckCard({ activeSession, now, todayTotal, onToggle, loading, workDate, setWorkDate, isProjectDay, setIsProjectDay }) {
   const isActive = Boolean(activeSession)
   const currentDuration = isActive ? now - Number(activeSession.start) : 0
   const targetProgress = Math.min(100, (todayTotal / DAY_TARGET) * 100)
@@ -34,8 +34,10 @@ export default function CheckCard({ activeSession, now, todayTotal, onToggle, lo
 
       {isActive ? (
         <div className="relative mt-6 flex items-center justify-between rounded-2xl bg-white/[0.06] px-4 py-3">
-          <span className="text-xs text-white/45">Phân loại ngày</span>
-          <span className="text-xs font-bold text-white/80">{activeSession.projectDate ? formatProjectDate(activeSession.projectDate) : 'Ngoài dự án · không tính income'}</span>
+          <span className="text-xs text-white/45">Ngày làm việc</span>
+          <span className="text-right text-xs font-bold text-white/80">
+            {formatDate(activeSession.workDate || activeSession.projectDate)} · {(activeSession.isProjectDay ?? Boolean(activeSession.projectDate)) ? 'Ngày dự án' : 'Ngày thường'}
+          </span>
         </div>
       ) : (
         <div className="relative mt-6 space-y-3">
@@ -54,21 +56,20 @@ export default function CheckCard({ activeSession, now, todayTotal, onToggle, lo
               <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${isProjectDay ? 'left-6' : 'left-1'}`} />
             </span>
           </button>
-          <label className={`block text-xs font-medium text-white/50 ${isProjectDay ? '' : 'opacity-45'}`}>
-            Ngày tham gia dự án
+          <label className="block text-xs font-medium text-white/50">
+            Ngày làm việc
             <input
               type="date"
-              value={projectDate}
-              disabled={!isProjectDay}
-              onChange={(event) => setProjectDate(event.target.value)}
-              className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.07] px-4 text-sm font-semibold text-white outline-none [color-scheme:dark] focus:border-coral focus:ring-4 focus:ring-coral/10 disabled:cursor-not-allowed"
+              value={workDate}
+              onChange={(event) => setWorkDate(event.target.value)}
+              className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.07] px-4 text-sm font-semibold text-white outline-none [color-scheme:dark] focus:border-coral focus:ring-4 focus:ring-coral/10"
             />
           </label>
         </div>
       )}
 
       <button
-        onClick={() => onToggle(projectDate, isProjectDay)}
+        onClick={() => onToggle(workDate, isProjectDay)}
         disabled={loading}
         className={`relative mt-4 flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl px-5 text-sm font-bold transition active:scale-[0.985] ${
           isActive ? 'bg-white text-ink hover:bg-stone-100' : 'bg-coral text-white shadow-button hover:bg-[#f08469]'

@@ -29,7 +29,7 @@ export default function App() {
   const [savingSettings, setSavingSettings] = useState(false)
   const [error, setError] = useState('')
   const [period, setPeriod] = useState(getCurrentPeriod)
-  const [projectDate, setProjectDate] = useState(getTodayDateInput)
+  const [workDate, setWorkDate] = useState(getTodayDateInput)
   const [isProjectDay, setIsProjectDay] = useState(true)
   const [sessionEditor, setSessionEditor] = useState(null)
   const [sessionSaving, setSessionSaving] = useState(false)
@@ -80,15 +80,15 @@ export default function App() {
     }
   }
 
-  const toggleSession = async (selectedProjectDate, selectedIsProjectDay) => {
+  const toggleSession = async (selectedWorkDate, selectedIsProjectDay) => {
     setActionLoading(true)
     setError('')
     try {
-      const data = activeSession ? await api.checkOut() : await api.checkIn(selectedProjectDate, selectedIsProjectDay)
+      const data = activeSession ? await api.checkOut() : await api.checkIn(selectedWorkDate, selectedIsProjectDay)
       setNow(Date.now())
       if (activeSession) {
         setSessions((current) => current.map((session) => session.id === data.session.id ? data.session : session))
-        setProjectDate(getTodayDateInput())
+        setWorkDate(getTodayDateInput())
         setIsProjectDay(true)
       } else {
         setSessions((current) => [...current, data.session])
@@ -184,8 +184,8 @@ export default function App() {
               sessions={sessions}
               onToggleSession={toggleSession}
               sessionLoading={actionLoading || initialLoading}
-              projectDate={projectDate}
-              setProjectDate={setProjectDate}
+              workDate={workDate}
+              setWorkDate={setWorkDate}
               isProjectDay={isProjectDay}
               setIsProjectDay={setIsProjectDay}
               onViewHistory={() => setActiveView('history')}

@@ -65,7 +65,7 @@ export function getTimeInput(timestamp) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-export function formatProjectDate(value) {
+export function formatDate(value) {
   if (!value) return ''
   return new Intl.DateTimeFormat('vi-VN', {
     weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric',

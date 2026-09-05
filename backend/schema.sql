@@ -3,10 +3,24 @@ CREATE TABLE IF NOT EXISTS public.work_sessions (
   check_in TIMESTAMPTZ(3) NOT NULL,
   check_out TIMESTAMPTZ(3),
   project_date DATE,
+  is_project_day BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_checkout_after_checkin CHECK (check_out IS NULL OR check_out >= check_in)
 );
+
+-- `project_date` được giữ tên để tương thích dữ liệu cũ, nhưng từ phiên bản này
+-- nó lưu ngày làm việc được chọn cho cả ngày dự án và ngày thường.
+ALTER TABLE public.work_sessions
+  ADD COLUMN IF NOT EXISTS is_project_day BOOLEAN;
+
+UPDATE public.work_sessions
+SET is_project_day = (project_date IS NOT NULL)
+WHERE is_project_day IS NULL;
+
+ALTER TABLE public.work_sessions
+  ALTER COLUMN is_project_day SET DEFAULT FALSE,
+  ALTER COLUMN is_project_day SET NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_only_one_active_session
   ON public.work_sessions ((1))

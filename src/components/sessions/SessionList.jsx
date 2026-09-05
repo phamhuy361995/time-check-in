@@ -25,7 +25,9 @@ export default function SessionList({ sessions, now, limit, expanded = false, on
         <div className={`custom-scrollbar mt-5 divide-y divide-stone-100 ${expanded ? '' : 'max-h-[318px] overflow-y-auto pr-1'}`}>
           {visibleSessions.map((session) => {
             const active = !session.end
-            const sessionDate = session.projectDate ? new Date(`${session.projectDate}T00:00:00`) : new Date(session.start)
+            const selectedDate = session.workDate || session.projectDate
+            const isProjectDay = session.isProjectDay ?? Boolean(session.projectDate)
+            const sessionDate = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date(session.start)
             return (
               <div key={session.id} className="flex items-center gap-3 py-4 first:pt-1 last:pb-1 sm:gap-4">
                 <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${active ? 'bg-[#e8f7ef] text-[#3a9a68]' : 'bg-[#fff1eb] text-coral'}`}>
@@ -38,7 +40,7 @@ export default function SessionList({ sessions, now, limit, expanded = false, on
                   </div>
                   <p className="mt-1 truncate text-xs text-stone-400">
                     {formatTime(session.start)} <span className="px-1 text-stone-300">→</span> {session.end ? formatTime(session.end) : 'Bây giờ'}
-                    {session.projectDate && <span className="ml-2 text-stone-300">• ngày dự án</span>}
+                    <span className="ml-2 text-stone-300">• {isProjectDay ? 'ngày dự án' : 'ngày thường'}</span>
                   </p>
                 </div>
                 <div className="shrink-0 text-right">

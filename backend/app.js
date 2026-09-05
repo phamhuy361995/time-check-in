@@ -34,7 +34,7 @@ async function getSettings() {
   return rows[0]
 }
 
-function isValidProjectDate(value) {
+function isValidDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false
   const date = new Date(`${value}T00:00:00Z`)
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
@@ -50,7 +50,7 @@ function parseCompletedSession(body = {}) {
   const checkIn = new Date(body.checkIn)
   const checkOut = new Date(body.checkOut)
 
-  if (!isValidProjectDate(workDate)) {
+  if (!isValidDate(workDate)) {
     return { error: 'Ngày làm việc không hợp lệ.' }
   }
   if (typeof body.isProjectDay !== 'boolean') {
@@ -72,7 +72,8 @@ function parseCompletedSession(body = {}) {
   return {
     checkIn,
     checkOut,
-    projectDate: body.isProjectDay ? workDate : null,
+    workDate,
+    isProjectDay: body.isProjectDay,
   }
 }
 
@@ -116,28 +117,33 @@ app.get('/api/sessions', asyncRoute(async (request, response) => {
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
-  const { rows } = await pool.query(`SELECT id, check_in, check_out, project_date FROM public.work_sessions ${where} ORDER BY check_in DESC`, values)
+  const { rows } = await pool.query(`SELECT id, check_in, check_out, project_date, is_project_day FROM public.work_sessions ${where} ORDER BY check_in DESC`, values)
   response.json({ sessions: rows.map(serializeSession) })
 }))
 
 app.post('/api/sessions/check-in', asyncRoute(async (request, response) => {
   const body = request.body || {}
   const isProjectDay = body.isProjectDay !== false
-  const projectDate = isProjectDay ? body.projectDate : null
-  if (isProjectDay && !isValidProjectDate(projectDate)) {
-    return response.status(400).json({ message: 'Vui lòng chọn ngày tham gia dự án hợp lệ.' })
+  const workDate = body.workDate || body.projectDate
+  if (!isValidDate(workDate)) {
+    return response.status(400).json({ message: 'Vui lòng chọn ngày làm việc hợp lệ.' })
   }
   const id = randomUUID()
   const checkIn = new Date()
   try {
-    await pool.query('INSERT INTO public.work_sessions (id, check_in, project_date) VALUES ($1, $2, $3)', [id, checkIn, projectDate])
+    await pool.query(
+      'INSERT INTO public.work_sessions (id, check_in, project_date, is_project_day) VALUES ($1, $2, $3, $4)',
+      [id, checkIn, workDate, isProjectDay],
+    )
   } catch (error) {
     if (error.code === '23505') {
       return response.status(409).json({ message: 'Bạn đang có một phiên làm việc chưa check out.' })
     }
     throw error
   }
-  response.status(201).json({ session: { id, start: checkIn.getTime(), end: null, projectDate } })
+  response.status(201).json({
+    session: serializeSession({ id, check_in: checkIn, check_out: null, project_date: workDate, is_project_day: isProjectDay }),
+  })
 }))
 
 app.post('/api/sessions', asyncRoute(async (request, response) => {
@@ -149,10 +155,10 @@ app.post('/api/sessions', asyncRoute(async (request, response) => {
 
   const id = randomUUID()
   const { rows } = await pool.query(
-    `INSERT INTO public.work_sessions (id, check_in, check_out, project_date)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, check_in, check_out, project_date`,
-    [id, input.checkIn, input.checkOut, input.projectDate],
+    `INSERT INTO public.work_sessions (id, check_in, check_out, project_date, is_project_day)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, check_in, check_out, project_date, is_project_day`,
+    [id, input.checkIn, input.checkOut, input.workDate, input.isProjectDay],
   )
   response.status(201).json({ session: serializeSession(rows[0]) })
 }))
@@ -170,10 +176,10 @@ app.put('/api/sessions/:id', asyncRoute(async (request, response) => {
 
   const { rows } = await pool.query(
     `UPDATE public.work_sessions
-        SET check_in = $1, check_out = $2, project_date = $3, updated_at = NOW()
-      WHERE id = $4
-      RETURNING id, check_in, check_out, project_date`,
-    [input.checkIn, input.checkOut, input.projectDate, request.params.id],
+        SET check_in = $1, check_out = $2, project_date = $3, is_project_day = $4, updated_at = NOW()
+      WHERE id = $5
+      RETURNING id, check_in, check_out, project_date, is_project_day`,
+    [input.checkIn, input.checkOut, input.workDate, input.isProjectDay, request.params.id],
   )
   if (!rows.length) return response.status(404).json({ message: 'Không tìm thấy phiên làm việc.' })
   response.json({ session: serializeSession(rows[0]) })
@@ -183,7 +189,7 @@ app.post('/api/sessions/check-out', asyncRoute(async (_request, response) => {
   const connection = await pool.connect()
   try {
     await connection.query('BEGIN')
-    const { rows } = await connection.query('SELECT id, check_in, project_date FROM public.work_sessions WHERE check_out IS NULL LIMIT 1 FOR UPDATE')
+    const { rows } = await connection.query('SELECT id, check_in, project_date, is_project_day FROM public.work_sessions WHERE check_out IS NULL LIMIT 1 FOR UPDATE')
     if (!rows.length) {
       await connection.query('ROLLBACK')
       return response.status(409).json({ message: 'Không có phiên làm việc nào đang chạy.' })
@@ -239,7 +245,7 @@ app.get('/api/payroll-summary', asyncRoute(async (request, response) => {
   const period = request.query.period || currentPeriod()
   const range = getPayrollRange(period, settings.period_start_day, settings.period_end_day)
   const { rows: sessions } = await pool.query(
-    `SELECT check_in, check_out, project_date FROM public.work_sessions
+    `SELECT check_in, check_out, project_date, is_project_day FROM public.work_sessions
      WHERE (project_date BETWEEN $1 AND $2)
         OR (project_date IS NULL AND check_in < $3 AND (check_out IS NULL OR check_out > $4))`,
     [range.startDate, range.endDate, new Date(range.endExclusive), new Date(range.start)],

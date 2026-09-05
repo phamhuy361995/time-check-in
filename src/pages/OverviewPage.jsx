@@ -12,8 +12,8 @@ export default function OverviewPage({
   sessions,
   onToggleSession,
   sessionLoading,
-  projectDate,
-  setProjectDate,
+  workDate,
+  setWorkDate,
   isProjectDay,
   setIsProjectDay,
   onViewHistory,
@@ -29,8 +29,8 @@ export default function OverviewPage({
           todayTotal={todayTotal}
           onToggle={onToggleSession}
           loading={sessionLoading}
-          projectDate={projectDate}
-          setProjectDate={setProjectDate}
+          workDate={workDate}
+          setWorkDate={setWorkDate}
           isProjectDay={isProjectDay}
           setIsProjectDay={setIsProjectDay}
         />

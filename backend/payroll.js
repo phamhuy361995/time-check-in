@@ -57,13 +57,14 @@ export function calculatePayroll(sessions, range, settings, now = Date.now()) {
     const totalMs = sessions.reduce((sum, session) => {
       const sessionStart = new Date(session.check_in).getTime()
       const sessionEnd = session.check_out ? new Date(session.check_out).getTime() : now
-      const projectDate = session.project_date
+      const selectedDate = session.project_date
         ? (typeof session.project_date === 'string' ? session.project_date.slice(0, 10) : new Date(session.project_date).toISOString().slice(0, 10))
         : null
-      if (projectDate) {
-        if (projectDate !== localDateLabel(cursor)) return sum
+      const isProjectDay = session.is_project_day == null ? Boolean(selectedDate) : Boolean(session.is_project_day)
+      if (selectedDate) {
+        if (selectedDate !== localDateLabel(cursor)) return sum
         const duration = Math.max(0, sessionEnd - sessionStart)
-        if (duration > 0) projectDay = true
+        if (duration > 0 && isProjectDay) projectDay = true
         return sum + duration
       }
       return sum + Math.max(0, Math.min(sessionEnd, dayEnd) - Math.max(sessionStart, cursor))

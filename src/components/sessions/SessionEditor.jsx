@@ -4,11 +4,11 @@ import { getDateInput, getTimeInput, getTodayDateInput } from '../../utils/time'
 
 export default function SessionEditor({ editor, onClose, onSave, saving }) {
   const session = editor.session
-  const initialDate = editor.date || (session ? (session.projectDate || getDateInput(session.start)) : getTodayDateInput())
+  const initialDate = editor.date || (session ? (session.workDate || session.projectDate || getDateInput(session.start)) : getTodayDateInput())
   const [date, setDate] = useState(initialDate)
   const [checkIn, setCheckIn] = useState(session ? getTimeInput(session.start) : '08:00')
   const [checkOut, setCheckOut] = useState(session?.end ? getTimeInput(session.end) : '17:00')
-  const [isProjectDay, setIsProjectDay] = useState(session ? Boolean(session.projectDate) : true)
+  const [isProjectDay, setIsProjectDay] = useState(session ? (session.isProjectDay ?? Boolean(session.projectDate)) : true)
   const [formError, setFormError] = useState('')
 
   const submit = async (event) => {
